@@ -1,5 +1,6 @@
 import React from 'react';
 var RecordWorker = require("worker-loader!./worker");
+var resampler = require('audio-resampler');
 
 let recLength = 0;
 let recBuffersL = [];
@@ -57,12 +58,26 @@ class Record extends React.Component {
     worker.onmessage = (e) => {
       var blob = e.data;
       var audioBlob = new Blob([blob], { type: 'audio/wav' });
-      var audio = document.querySelector('audio');
-      audio.src = window.URL.createObjectURL(audioBlob);
-      this.forceDownload(blob, 'record.wav');
+  
+      resampler(window.URL.createObjectURL(audioBlob), 16000, function(event){
+        event.getFile(function (fileEvent) {
+          var audio = document.querySelector('audio');
+          audio.src = fileEvent;
+          var a = document.createElement("a");
+          document.body.appendChild(a);
+          a.download = "resampled.wav";
+          a.style = "display: none";
+          a.href = fileEvent;
+          a.click();
+          window.URL.revokeObjectURL(fileEvent);
+          document.body.removeChild(a);
+        });
+      });
+
+      // this.forceDownload(blob, 'record.wav');
     }
 
-    const node = context.createScriptProcessor(4096, 2, 2);
+    const node = context.createScriptProcessor(4096, 1, 1);
     audioInput.connect(inputPoint);
 
     node.onaudioprocess = (e) => {
@@ -71,7 +86,6 @@ class Record extends React.Component {
           command: 'record',
           buffer: [
             e.inputBuffer.getChannelData(0),
-            e.inputBuffer.getChannelData(1)
           ]
         });
       }
@@ -89,7 +103,7 @@ class Record extends React.Component {
   exportWav = () => {
     const type = 'audio/wav';
     this.worker.postMessage({
-      command: 'exportWAV',
+      command: 'exportMonoWAV',
       type: type
     });
   }
